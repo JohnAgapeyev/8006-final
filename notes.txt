@@ -1,0 +1,236 @@
+network 1:
+    ec2:
+    	- logs look clean, only successful ssh connections, and what seem to be amazon credential api deprecation warnings
+        - captures are more interesting
+        - CAPTURES FOUND ON EXTERNAL WEBSITE
+        - https://packettotal.com/app/analysis?id=7ebac0fca06d2e7d4388d8104656d253
+        - Okay maybe not, but it's damn close
+        - That website displays not only the traffic and analysis of the packets, but provides a name and a hash
+        - Found this site by googling 121.130.171.151 for malicious blacklisting
+        - The site gives me full analysis of pcaps using Bro Suricata and Elastisearch
+        - I'm gonna use the SHIT out of this (when it works)
+        - PacketTotal is amazing, but SLOW (Unable to script due to captcha and no api)
+        - Might not be able to use it very much
+        Snort:
+            - multiple alerts on malicious traffic (router information disclosure, and network trojans)
+            - Trojans are backed by virus total links, seems like a smoking gun, if I can find the payloads
+        Malicious:
+            - 121.130.171.151 (Attempted RCE in NetGear ReadyNAS surveillance); found using snort, confirmed with wireshark
+            - 61.74.23.223 (Attempted RCE in NetGear ReadyNAS surveillance); found using snort, confirmed with wireshark
+            - 171.97.87.12 (Same as above)
+            - Those 3 IPs are IoT_Reaper infected (Guaranteed)
+            - https://blog.radware.com/security/2017/10/iot_reaper-botnet/
+            - They all perform syn scans, then vulnerability scans in a very specific order
+            - 185.172.110.230 scanning using muieblackcat
+            - 31.186.3.51 confirmed Apache Struts RCE attmept (Snort and Wireshark)
+            - Numerous IPs are doing SSH brute force (Wireshark shows small amount of packets then FIN)
+    log-server:
+        - Log server has much more logs obviously
+        - Base logs are simple, remote folder holds logs for other machines
+        - Those other machines are seeing ssh brute-forcing at the minimum, need to take a deeper look
+        - Got ip cross-checking down
+        - 172.31.28.22 is equivalent to 192.168.10.20 in log server
+        - The Apacahe Struts RCE ip is duplicated with same date time
+        - Traffic is only duplicated from 10-31 onwards, so the Apache struts ip ssh bruteforcing isn't captured here
+        - SSH is clean, only accepted ssh through keys
+        Snort:
+            - Same as ec2 mostly
+            - Addition of Apache Struts Privilege Escalation attempts
+        Malicious:
+            - 121.18.238.28 (SSH Brute Force); found using PacketTotal, confirmed with Wireshark
+            - 34.213.171.57 (muieblackcat Scanner); Found using wireshark
+            - 185.172.110.230 scanning using muieblackcat (Same IP in ec2 captures)
+            - 31.186.3.51 confirmed Apache Struts RCE attmept (Snort and Wireshark)
+            - 185.140.120.35 Some http scanner, not sure which
+            - 71.6.202.198 Flagged as malicious IP doing HTTP GET for ccvv
+            - 69.30.254.140 Outbound connection to download Xor DDOS trojan binaries (w.txt g.txt, etc)
+            - Outbound connection to 118.112.31.120 with repeated SYN + NONCE packets to port 9301
+            - This is the work of Xor DDOS actively running, machine GUARANTEED compromised
+            - The repeated DNS queries before the SYN flood lead to https://www.detux.org/report.php?sha256=5f0a2b492c8accde73f1e3db51fe398d54e622655d34fd6d49f7a7264179a885
+            - That site's listed md5 of the binary matches the u1433.txt binary downloaded earlier
+    web:
+        - No captures, only logs
+        - Logs are consistent, ssh bruteforcing
+        - Not sure what else to look at in logs other than the IPs involved with the bruteforcing
+        - Got a list of 20 IPs that logged in as root/admin over 1k times
+        - The following IPs successfully connected over ssh to this machine AFTER PASSWORD FAILURE:
+            - 121.18.238.119
+            - 192.168.10.16
+            - 192.168.10.17
+            - 192.168.10.254
+            - 192.168.11.18
+            - 218.87.109.154
+            - 221.194.47.233
+            - 54.209.249.149
+
+network 2:
+    Database:
+        - Server is clean (confident)
+        - Only has log files, and the log files are limited, and neat
+        - Only noticeable thing is occassional failed passwords, but they seem human, and have no IP attached
+    Logger:
+        - Also only has log files (smh guys)
+        - Mostly boring logs
+        - Of note: messages logs contain snort firewall logs
+            - Definitely signs of scanning involved
+            - Potentially malicious traffic as well, but until I can cross-reference IPs I can't tell if it's going in or out, or both
+            - Stuff like ssh bruteforcing, weird TTL and some odd http requests, including attempted buffer overflow
+    File:
+        - MORE LOG FILES AND NO CAPTURES
+        - Jesus this is dumb
+        - Logs are mostly clean
+        - Literally the only interesting thing is ssh bruteforcing
+        - 193.201.224.206 is accepted but 193.201.224.236 fails on bruteforce, connected?
+        - The following IPs successfully connected over ssh to this machine AFTER PASSWORD FAILURE:
+            - 103.207.37.155
+            - 106.57.51.236
+            - 115.228.56.30
+            - 118.71.71.203
+            - 119.193.140.194
+            - 120.60.136.116
+            - 181.214.87.4
+            - 182.100.67.40
+            - 201.177.15.149
+            - 41.58.224.138
+            - 5.188.10.144
+            - 5.188.10.156
+            - 5.188.10.182
+            - 70.78.101.15
+            - 81.234.101.66
+            - 82.102.216.128
+            - 95.160.63.17
+    IDS:
+        - Consists of Snort logs, regular logs, and packet captures
+        - Regular logs:
+            - Completely clean
+            - There's a history of root bash history in there
+            - Shows someone inserting a usb drive, then a few minutes later inspecting processes and snort logs
+            - Not sure if just someone's cleanup, or they were intentionally doing shit on their network for us
+            - Other logs will confirm suspicions
+        - Snort logs:
+            - This is interesting
+            - Shows a combination of scanning/malicious outbound traffic?
+            - Not sure what to think
+            - Lots of scanning data in the 192.168 subnet, so either internal recon, or they scanned themselves for fun
+            - Also a lot of traffic outbound, with malicious payloads, to other IPs
+            - IPs range from 192.168, to local telus addresses, to global IPs, once was in China?
+            - Hence my thoughts of compromise...
+            - Are they just randomly scanning IP's?
+            - Or is this something malicious?
+            - Need to cross-reference captures
+        - Packet captures:
+            - Running snort on the captures produced some info
+            - Primarily a ssh version mismatch alert
+            - Based on what I've seen, this is likely the result of the scan
+            - Or a malicious actor trying to connect with an older version
+            - Otherwise, relatively quiet compared to the other capture types
+        - Malicious:
+            - 192.168.0.10 is scanning local subnet (Seeing scans to 4, 11, 14, 16, 2, 3 under the 192.168.0 subnet)
+            - Looks like SYN scan, want to say nmap, but don't know how to fingerprint tool
+            - Mass ARP to 192.168.0.0/24, and every responding IP gets flooded with SYN's
+            - Snort logs says 192.168.0.10 is using NMAP due to christmas scan
+            - 192.168.0.14 is doing very slow telnet brute forcing
+            - 192.168.0.16 is doing FULL IPV4 SSH BRUTE FORCING (5.2 million IPs outgoing on port 22)
+            - Can't tell who connects to 192.168.0.16, wireshark doesn't show me much, too much brute forcing on SSH to tell
+            - No logs on the IDS machine, so either they were deleted, or they are on of the 20ish IPs found in the File Server
+
+    Web:
+        - Web server is pretty clean
+        - They gave us their entire website for some stupid reason
+        - Seems like fake data they made up (not real data)
+        - Only files of note are log files hidden in some subfolder
+        - Logs show source IP 192.168.0.14 making LARGE amounts of http get requests
+        - Requests consist of information disclosure, file/folder enumeration, XSS, and login bruteforce
+        - Hence why I think it's fake
+        - Garbage site that has no record online
+        - Main image is free stock image
+        - Logs only contain single IP, in non-routable address class, performing automated scanning of website
+
+network 3:
+    atlas:
+        - Logs:
+            - Home logs are basically empty
+            - They have some firefox configs, but last I checked, I couldn't open .jsonlz4 files, so whatever
+            - root has nothing except those ssh keys
+            - SSH server is dropping all packets at firewall, so even if the keys worked, the server won't accept me
+            - Logs user has primarily logs lol
+            - Messages log files contains snort logs, but it seems messy, check the snort folder instead
+            - Lots of snort data, I'm not sure if it's duplicated over the captures they provided
+            - Nope, not duplicated, snort logs are from after captures
+        - Captures:
+            - Brief look shows definite trojan activity
+            - Wireshark shows outbound connection to 5.188.11.112 and downloading ELF payloads
+            - Symantec lists that IP as Proxym trojan, and the IP has been flagged as apparently an IoT botnet
+            - Outbound connection to 124.37.34.51 downloads muhstik binaries
+            - Outbound connection to 84.89.139.66 downloads muhstik binaries
+            - 192.168.10.1 is guaranteed compromised
+            - Compromise happened from 134.236.72.11 (Found their telnet login, spawn a shell, then used wget to download multiple malicious binaries)
+            - Same compromise happens on 58.11.118.94
+            - 58.11.118.94 came first by several hours (Though admin:admin is a shit set of credentials regardless)
+            - Connects to multiple mining pool IPs
+                - 138.197.183.116
+                - 213.32.29.168
+                - 92.222.180.118
+                - 163.172.204.219
+            - So many malicious binaries being downloaded (154 of them...)
+            - Snort literally has nothing except this Mirai variant and the crypto bot mining
+            - Yup, snort has jack shit all outside of those very real binary downloads
+            - Captures are all telnet and DNS, woo?
+            - Seeing the nickname PING PONG behaviour from the Tsunami malware over irc on channel fuck.off
+    hyperion:
+        - Logs:
+            - Something odd is happening on this machine
+            - Bash history on admin user shows minerd running (CPU miner for cryptocurriencies)
+            - Bitcoin wallet address is 1N9S64qtm7Wp6pTrguYvjREASBXBqnu5ch
+            - Connection happens to 149.56.122.79:6233
+            - Wallet is ACTIVE (Literally transactions happening every week or so up to today (16/03/2018))
+            - theflatearthers.org is this machine, but the browser doesn't get a response, and the WHOIS is useless
+            - Otherwise, home logs are pretty sparse and boring
+            - CHECK ROOT LOG FOLDER
+            - Found multiple executables with the name muhstik
+            - Virus total lights them up as malicious
+            - Seems to be something called Tsunami/Kaiten
+            - This is the same trojan that infected Linux Mint 1.5 years ago
+            - Works over IRC
+            - Look over captures for strings like NICK PING PONG (I've already seen this, but needs more data)
+            - The following IPs were accepted on ssh after FAILED PASSWORD CHECKS:
+                - 69.197.135.162
+                - 74.91.17.113
+                - 103.89.88.86
+                - 184.70.185.138
+                - 193.201.224.218
+                - 198.98.50.113
+                - 203.215.172.6
+            - I've got a list of 60 IPs that logged in for less than a minute as root/admin over 10k times
+            - Machine is hooped
+        - Captures:
+            - Nov 8th, apache struts capture (Shows an email address in a packet)
+            - Packet says too many connections, throttling, contact X if this is a mistake
+            - That email address is muie@pula.ro which uses a Romanian TLD (Likely the source of the botnet?)
+            - Definite IRC bot connection captured
+            - Machine is guaranteed compromised, snort confirms it
+            - Snort again only has the malware and crypto mining ips
+        - Malicious:
+            - 156 binaries are downloaded to/from this machine
+            - Connects to multiple mining pool IPs
+                - 138.197.183.116
+                - 213.32.29.168
+                - 92.222.180.118
+                - 163.172.204.219
+            - HTTP GET to 5.188.11.112 to download malware
+            - Connects to IRC at 31.222.161.239:8080 as C2 server
+            - 58.11.118.94 compromises the machine through telnet about 1.5 hours into capturing
+            - 119.42.88.199 also compromises the machine (9:24:31 11/08)
+            - 58.11.118.94 comes second by 10 seconds?
+            - That seems far too coordinated, especially when they do the same thing
+
+    prometheus:
+        - Logs:
+            - Only contains windows logs and ftp logs
+            - So I can cross-reference IPs from other captures to ensure no other accesses
+            - But otherwise, I need to find some way to reading the windows MTA files or I'll have nothing on this host
+            - Turns out xxd can parse them
+            - Need to strip nulls or remove '.' from output to make it readable though
+            - So there's nothing there, big woop
+            - Guess I'll BS for a few sentences and move on
+
